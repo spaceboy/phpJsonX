@@ -6,8 +6,10 @@ use Spaceboy\JsonX\Exceptions\JsonXException;
 use function json_decode;
 use function file_exists;
 use function file_get_contents;
+use function file_put_contents;
 use function is_file;
 use function is_readable;
+use function is_writable;
 
 /**
  * Class JsonX converts JSONX to JSON format.
@@ -16,6 +18,13 @@ use function is_readable;
  * @author  spaceboy
  */
 final class JsonX {
+
+    /**
+     * JSON default file extenstion.
+     *
+     * @var string
+     */
+    public const FILE_EXT_JSON = 'json';
 
     /**
      * Exception code error types.
@@ -158,6 +167,53 @@ final class JsonX {
     {
         self::fromFile($fileName);
         return self::decode();
+    }
+
+    /**
+     * Translates JSONX file to JSON.
+     *
+     * @param string $sourceFileName
+     * @param ?string $targetFileName
+     * @param bool $overwrite
+     *
+     * @return int<0, max>|false
+     * @throws JsonXException
+     */
+    public static function translateFile(
+        string $sourceFileName,
+        ?string $targetFileName = null,
+        bool $overwrite = true
+    ): mixed
+    {
+        if (
+            !file_exists($sourceFileName)
+            || !is_file($sourceFileName)
+            || !is_readable($sourceFileName)
+        )
+        {
+            throw new JsonXException("Source file not exists, is not file or is not readable ({$sourceFileName}).", self::ERROR_FILE);
+        }
+        if ($targetFileName === null)
+        {
+            $targetFileName = preg_replace('/\.[^\.]$/', '.' . self::FILE_EXT_JSON, $sourceFileName);
+        }
+        if (
+            file_exists($targetFileName)
+        )
+        {
+            if (!$overwrite)
+            {
+                throw new JsonXException("Target file already exists ({$targetFileName}).", self::ERROR_FILE);
+            }
+            if (
+                !is_file($targetFileName)
+                || !is_writable($targetFileName)
+            )
+            {
+                throw new JsonXException("Target file already exists and is not file or is not writable ({$targetFileName}).", self::ERROR_FILE);
+            }
+        }
+        return file_put_contents($targetFileName, self::toJson(file_get_contents($sourceFileName) ?: ''));
     }
 
     /**
