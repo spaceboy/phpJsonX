@@ -217,7 +217,7 @@ final class JsonX {
     }
 
     /**
-     * Sets assoc argument for PHP json_decode used in decode() method.
+     * Sets "associative" argument for PHP json_decode used in decode() method.
      *
      * @param bool $associative
      * @return void
@@ -230,7 +230,7 @@ final class JsonX {
     }
 
     /**
-     * Sets assoc argument for PHP json_decode used in decode() method.
+     * Sets "depth" argument for PHP json_decode used in decode() method.
      *
      * @param int<1, max> $depth
      * @return void
@@ -243,7 +243,7 @@ final class JsonX {
     }
 
     /**
-     * Sets assoc argument for PHP json_decode used in decode() method.
+     * Sets "flags" argument for PHP json_decode used in decode() method.
      *
      * @param int $flags
      * @return void
