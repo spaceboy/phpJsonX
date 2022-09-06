@@ -225,7 +225,7 @@ final class JsonX {
      * @param ?string $targetFileName
      * @param bool $overwrite
      *
-     * @return int<0, max>|false
+     * @return mixed
      * @throws JsonXException
      */
     public function translateFile(
