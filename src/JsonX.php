@@ -103,8 +103,7 @@ final class JsonX {
             !file_exists($fileName)
             || !is_file($fileName)
             || !is_readable($fileName)
-        )
-        {
+        ) {
             throw new JsonXException("File not exists, is not file or is not readable ({$fileName}).", self::ERROR_FILE);
         }
         $this->source = (file_get_contents($fileName) ?: '');
@@ -137,7 +136,7 @@ final class JsonX {
      */
     public function decode(
         string $source = null
-    )
+    ): mixed
     {
         if ($source !== null)
         {
@@ -173,7 +172,7 @@ final class JsonX {
      */
     public function decodeFile(
         string $fileName
-    )
+    ): mixed
     {
         $this->fromFile($fileName);
         return $this->decode();
@@ -201,18 +200,16 @@ final class JsonX {
             }
             $targetFileName = preg_replace('/\.[^\.]$/', '.' . self::FILE_EXT_JSON, $this->sourceFileName);
         }
-        if (
-            file_exists($targetFileName)
-        ) {
-            if (!$this->overwrite)
-            {
+        // Since now, $targetFileName cannot be null:
+        /** @var string $targetFileName */
+        if (file_exists($targetFileName)) {
+            if (!$this->overwrite) {
                 throw new JsonXException("Target file already exists ({$targetFileName}).", self::ERROR_FILE);
             }
             if (
                 !is_file($targetFileName)
                 || !is_writable($targetFileName)
-            )
-            {
+            ) {
                 throw new JsonXException("Target file already exists and is not file or is not writable ({$targetFileName}).", self::ERROR_FILE);
             }
         }
@@ -311,12 +308,12 @@ final class JsonX {
             '/\s*#(?=([^\"\\\\]*(\\\\.|\"([^\"\\\\]*\\\\.)*[^\"\\\\]*\"))*[^\"]*$).*$/m',
             '',
             $this->source
-        );
+        ) ?? '';
         $this->source = preg_replace(
             '/\s*\/\/(?=([^\"\\\\]*(\\\\.|\"([^\"\\\\]*\\\\.)*[^\"\\\\]*\"))*[^\"]*$).*$/m',
             '',
             $this->source
-        );
+        ) ?? '';
     }
 
     /**
@@ -330,6 +327,6 @@ final class JsonX {
             '/\,(?!\s*?[\{\[\"\'\w])/m',
             '',
             $this->source
-        );
+        ) ?? '';
     }
 }
