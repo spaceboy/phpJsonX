@@ -10,6 +10,7 @@ use function file_put_contents;
 use function is_file;
 use function is_readable;
 use function is_writable;
+use function realpath;
 
 /**
  * Class JsonX converts JSONX to JSON format.
@@ -18,7 +19,6 @@ use function is_writable;
  * @author  spaceboy
  */
 final class JsonX {
-
     /**
      * JSON default file extenstion.
      *
@@ -40,34 +40,51 @@ final class JsonX {
      *
      * @var string
      */
-    private static string $jsonx = '';
+    private string $source = '';
 
     /**
+     * Source file name.
+     *
+     * @var string|null
+     */
+    private ?string $sourceFileName = null;
+
+    /**
+     * Flag "overwrite" for {@see JsonX::writeJson()} method.
+     *
      * @var bool
      */
-    private static bool $associative = true;
+    private bool $overwrite = false;
+
+    /**
+     * Flag "associative" for PHP json_decode.
+     *
+     * @var bool
+     */
+    private bool $associative = true;
 
     /**
      * @var int<1, max>
      */
-    private static int $depth = 512;
+    private int $depth = 512;
 
     /**
      * @var int
      */
-    private static int $flags = 0;
+    private int $flags = 0;
 
     /**
      * Loads JSONX string.
      *
-     * @param string $jsonx
-     * @return void
+     * @param string $source
+     * @return self
      */
-    public static function fromString(
-        string $jsonx
-    ): void
+    public function fromString(
+        string $source
+    ): self
     {
-        self::$jsonx = $jsonx;
+        $this->source = $source;
+        return $this;
     }
 
     /**
@@ -75,12 +92,12 @@ final class JsonX {
      *
      * @param string $fileName
      *
-     * @return void
+     * @return self
      * @throws JsonXException
      */
-    public static function fromFile(
+    public function fromFile(
         string $fileName
-    ): void
+    ): self
     {
         if (
             !file_exists($fileName)
@@ -90,27 +107,23 @@ final class JsonX {
         {
             throw new JsonXException("File not exists, is not file or is not readable ({$fileName}).", self::ERROR_FILE);
         }
-        self::$jsonx = (file_get_contents($fileName) ?: '');
+        $this->source = (file_get_contents($fileName) ?: '');
+        $this->sourceFileName = (realpath($fileName) ?: null);
+        return $this;
     }
 
     /**
      * Returns given JSONX source converted to JSON string;
      * when called without argument, returns actual (loaded by fromFile or fromString methods) JSONX converted to JSON.
      *
-     * @param string $source
-     *
      * @return string
      * @throws JsonXException
      */
-    public static function toJson(
-        string $source = null
-    ): string
+    public function toJson(): string
     {
-        return preg_replace(
-            '/\s+#(?=([^\"\\\\]*(\\\\.|\"([^\"\\\\]*\\\\.)*[^\"\\\\]*\"))*[^\"]*$).*$/m',
-            '',
-            ($source ?? self::$jsonx)
-        );
+        $this->removeComments();
+        $this->removeTrailingCommas();
+        return $this->source = trim($this->source);
     }
 
     /**
@@ -122,31 +135,28 @@ final class JsonX {
      * @return mixed
      * @throws JsonXException
      */
-    public static function decode(
+    public function decode(
         string $source = null
     )
     {
-        if (
-            $source === null
-            && !self::$jsonx
-        )
+        if ($source !== null)
         {
-            throw new JsonXException(
-                'Source for decoding is empty.',
-                self::ERROR_DECODE
-            );
+            $this->source = $source;
+        }
+        if (!$this->source) {
+            throw new JsonXException('Source for decoding is empty.', self::ERROR_DECODE);
         }
         $decode = json_decode(
-            self::toJson($source ?? self::$jsonx),
-            self::$associative,
-            self::$depth,
-            self::$flags
+            $this->toJson(),
+            $this->associative,
+            $this->depth,
+            $this->flags
         );
         if ($decode === null) {
             throw new JsonXException(
                 sprintf(
                     'Source cannot be decoded or the encoded data is deeper than the nesting limit (%s).',
-                    self::$depth
+                    $this->depth
                 ),
                 self::ERROR_DECODE
             );
@@ -161,12 +171,54 @@ final class JsonX {
      * @return mixed
      * @throws JsonXException
      */
-    public static function decodeFile(
+    public function decodeFile(
         string $fileName
     )
     {
-        self::fromFile($fileName);
-        return self::decode();
+        $this->fromFile($fileName);
+        return $this->decode();
+    }
+
+    /**
+     * Writes JSON to file.
+     *
+     * @param string|null $targetFileName
+     *
+     * @return mixed
+     * @throws JsonXException
+     */
+    public function writeJson(
+        ?string $targetFileName = null
+    ): mixed
+    {
+        // Convert source to JSON:
+        $this->toJson();
+
+        // Handle output file:
+        if ($targetFileName === null) {
+            if ($this->sourceFileName === null) {
+                throw new JsonXException("Target file undefined.", self::ERROR_FILE);
+            }
+            $targetFileName = preg_replace('/\.[^\.]$/', '.' . self::FILE_EXT_JSON, $this->sourceFileName);
+        }
+        if (
+            file_exists($targetFileName)
+        ) {
+            if (!$this->overwrite)
+            {
+                throw new JsonXException("Target file already exists ({$targetFileName}).", self::ERROR_FILE);
+            }
+            if (
+                !is_file($targetFileName)
+                || !is_writable($targetFileName)
+            )
+            {
+                throw new JsonXException("Target file already exists and is not file or is not writable ({$targetFileName}).", self::ERROR_FILE);
+            }
+        }
+
+        // Write output:
+        return file_put_contents($targetFileName, $this->source);
     }
 
     /**
@@ -179,79 +231,105 @@ final class JsonX {
      * @return int<0, max>|false
      * @throws JsonXException
      */
-    public static function translateFile(
+    public function translateFile(
         string $sourceFileName,
         ?string $targetFileName = null,
         bool $overwrite = true
     ): mixed
     {
-        if (
-            !file_exists($sourceFileName)
-            || !is_file($sourceFileName)
-            || !is_readable($sourceFileName)
-        )
-        {
-            throw new JsonXException("Source file not exists, is not file or is not readable ({$sourceFileName}).", self::ERROR_FILE);
-        }
-        if ($targetFileName === null)
-        {
-            $targetFileName = preg_replace('/\.[^\.]$/', '.' . self::FILE_EXT_JSON, $sourceFileName);
-        }
-        if (
-            file_exists($targetFileName)
-        )
-        {
-            if (!$overwrite)
-            {
-                throw new JsonXException("Target file already exists ({$targetFileName}).", self::ERROR_FILE);
-            }
-            if (
-                !is_file($targetFileName)
-                || !is_writable($targetFileName)
-            )
-            {
-                throw new JsonXException("Target file already exists and is not file or is not writable ({$targetFileName}).", self::ERROR_FILE);
-            }
-        }
-        return file_put_contents($targetFileName, self::toJson(file_get_contents($sourceFileName) ?: ''));
+        // Read input:
+        $this->fromFile($sourceFileName);
+
+        // Convert JSONX to JSON & write output file:
+        return $this->writeJson($targetFileName);
     }
 
     /**
      * Sets "associative" argument for PHP json_decode used in decode() method.
      *
      * @param bool $associative
-     * @return void
+     * @return self
      */
-    public static function setAssociative(
+    public function setAssociative(
         bool $associative
-    ): void
+    ): self
     {
-        self::$associative = $associative;
+        $this->associative = $associative;
+        return $this;
     }
 
     /**
      * Sets "depth" argument for PHP json_decode used in decode() method.
      *
      * @param int<1, max> $depth
-     * @return void
+     * @return self
      */
-    public static function setDepth(
+    public function setDepth(
         int $depth
-    ): void
+    ): self
     {
-        self::$depth = $depth;
+        $this->depth = $depth;
+        return $this;
     }
 
     /**
      * Sets "flags" argument for PHP json_decode used in decode() method.
      *
      * @param int $flags
+     * @return self
+     */
+    public function setFlags(
+        int $flags
+    ): self
+    {
+        $this->flags = $flags;
+        return $this;
+    }
+
+    /**
+     * Sets "overwrite" flag.
+     *
+     * @param bool $overwrite
+     * @return self
+     */
+    public function setOverwrite(
+        bool $overwrite = true
+    ): self
+    {
+        $this->overwrite = $overwrite;
+        return $this;
+    }
+
+    /**
+     * Removes comments from source.
+     *
      * @return void
      */
-    public static function setFlags(
-        int $flags
-    ): void
+    private function removeComments(): void
     {
-        self::$flags = $flags;
+        $this->source = preg_replace(
+            '/\s*#(?=([^\"\\\\]*(\\\\.|\"([^\"\\\\]*\\\\.)*[^\"\\\\]*\"))*[^\"]*$).*$/m',
+            '',
+            $this->source
+        );
+        $this->source = preg_replace(
+            '/\s*\/\/(?=([^\"\\\\]*(\\\\.|\"([^\"\\\\]*\\\\.)*[^\"\\\\]*\"))*[^\"]*$).*$/m',
+            '',
+            $this->source
+        );
+    }
+
+    /**
+     * Removes trailing commas from source.
+     *
+     * @return void
+     */
+    private function removeTrailingCommas(): void
+    {
+        $this->source = preg_replace(
+            '/\,(?!\s*?[\{\[\"\'\w])/m',
+            '',
+            $this->source
+        );
     }
 }
